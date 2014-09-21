@@ -12,7 +12,10 @@ typedef int bool;
 void initializeMPI();
 void finalizeMPI();
 void solveProblem1(int numberOfAlternations, int initializationValue);
+void solveProblem1Old(int numberOfAlternations, int initializationValue);
 void solveProblem2(int numberOfAlternations, int initializationValue);
+void solveProblem2Old(int numberOfAlternations, int initializationValue);
+void solveProblem2v2(int numberOfAlternations, int initializationValue);
 void initializeMatrix(int matrix[8][8]);
 bool matrixIsComplete(int matrix[8][8]);
 void printMatrix(int matrix[8][8]);
@@ -50,7 +53,7 @@ int main(int argc, char** argv)
     if (problemToSolve == 1)
         solveProblem1(numberOfAlterations, initializationValue);
     else if (problemToSolve == 2)
-        solveProblem2(numberOfAlterations, initializationValue);
+        solveProblem2v2(numberOfAlterations, initializationValue);
     
     clock_gettime(CLOCK_REALTIME, &end);
 	
@@ -195,6 +198,83 @@ void solveProblem2(int numberOfAlterations, int initializationValue)
 			for (i = 0; i < 8; i++)
 				message[i+1] = row[i];
 			
+			MPI_Send(message, 9, MPI_INT, 0, 0, MPI_COMM_WORLD);
+		}
+	}
+}
+
+void solveProblem2v2(int numberOfAlterations, int initializationValue)
+{
+	int message[9];
+	if (procRank == 0)
+	{
+		int matrix[8][8];
+		initializeMatrix(matrix);
+		
+		while (!matrixIsComplete(matrix))
+		{
+			MPI_Recv(message, 9, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			
+			int i;
+			for (i = 0; i < 8; i++)
+			{
+				matrix[message[0]][i] = message[i+1];
+			}
+		}
+		
+		printMatrix(matrix);
+	}
+	else if (procRank <= 16)
+	{
+		int row[8];
+		int rowNum = (procRank - 1) / 2;
+		int i, j;
+		
+		for (i = 0; i < 8; i++)
+			row[i] = initializationValue;
+			
+		if (procRank % 2 == 1)
+		{
+			for (j = 0; j < 8; j++)
+			{
+				for (i = 1; i <= numberOfAlterations / 2; i++)
+				{
+					usleep(1000);
+					if (j == 0)
+					{
+						row[0] += rowNum * i;
+					}
+					else
+					{
+						row[j] += row[j - 1] * i;
+					}
+				}
+				
+				message[0] = row[j];
+				MPI_Send(message, 1, MPI_INT, procRank + 1, 0, MPI_COMM_WORLD);
+			}
+		}
+		else
+		{
+			for (j = 0; j < 8; j++)
+			{
+				MPI_Recv(message, 1, MPI_INT, procRank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+				row[j] = message[0];
+				for (i = numberOfAlterations / 2 + 1; i <= numberOfAlterations; i++)
+				{
+					usleep(1000);
+					
+					if (j == 0)
+						row[0] += rowNum * i;
+					else
+						row[j] += row[j - 1] * i;
+				}
+			}
+			
+			message[0] = rowNum;
+			for (i = 0; i < 8; i++)
+				message[i+1] = row[i];
+				
 			MPI_Send(message, 9, MPI_INT, 0, 0, MPI_COMM_WORLD);
 		}
 	}

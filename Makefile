@@ -12,7 +12,7 @@ main : main.o
 	$(CC) $(LFLAGS) main.o -o main
 
 run:
-	mpirun --hostfile hostfile -np 9 main
+	mpirun --hostfile hostfile -np 17 main
 
 ps:
 	ps -fu $$USER
