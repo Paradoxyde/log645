@@ -1,9 +1,9 @@
 PROG = main
 CFLAGS = -g -fPIC -m64 -Wall -std=c99 -D_BSD_SOURCE -D_POSIX_C_SOURCE=200112
 LFLAGS= -fPIC -m64 -Wall -Wl,--no-as-needed -lrt
-CC = gcc
+CC = mpicc
 
-all: $(PROG)
+all: $(PROG) run
 
 main.o: main.c
 	$(CC) $(CFLAGS) -c main.c
@@ -12,7 +12,7 @@ main : main.o
 	$(CC) $(LFLAGS) main.o -o main
 
 run:
-	./main
+	mpirun --hostfile hostfile -np 9 main
 
 ps:
 	ps -fu $$USER
