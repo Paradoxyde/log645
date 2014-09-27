@@ -1,0 +1,1 @@
+mpirun --hostfile hostfile -np 23 tp1 $1 $2 $3

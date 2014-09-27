@@ -1,0 +1,3 @@
+cluster-srv0.logti.etsmtl.ca cpu=8
+cluster-srv1.logti.etsmtl.ca cpu=8
+cluster-srv2.logti.etsmtl.ca cpu=8
