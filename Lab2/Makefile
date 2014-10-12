@@ -1,22 +1,8 @@
-PROG = tp1
-CFLAGS = -g -fPIC -m64 -Wall -std=c99 -D_BSD_SOURCE -D_POSIX_C_SOURCE=200112
-LFLAGS= -fPIC -m64 -Wall -Wl,--no-as-needed -lrt
-CC = mpicc
-
-all: $(PROG)
-
-tp1.o: tp1.c
-	$(CC) $(CFLAGS) -c tp1.c
-
-tp1 : tp1.o
-	$(CC) $(LFLAGS) tp1.o -o tp1
+all:
+	gcc -std=c99 -fopenmp -olabo2 labo2.c
 
 run:
-	mpirun --hostfile hostfile -np 23 tp1
-
-ps:
-	ps -fu $$USER
+	./labo2
 
 clean:
-	/bin/rm -f tp1
-	/bin/rm -f tp1.o
+	rm labo2
