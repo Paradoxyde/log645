@@ -161,11 +161,8 @@ void parallelSolve()
 		
 	double timeStart, timeEnd, Texec;
 	struct timeval tp;
-	if (procRank == aggregatorIndex)
-	{
-		gettimeofday (&tp, NULL);
-		timeStart = (double) (tp.tv_sec) + (double) (tp.tv_usec) / 1e6;
-	}
+	gettimeofday (&tp, NULL);
+	timeStart = (double) (tp.tv_sec) + (double) (tp.tv_usec) / 1e6;
 	
 	// Determine the best section size
 	/*for (i = sqrt(procCount); i > 0 && sectionRowCount == 0; i--)
