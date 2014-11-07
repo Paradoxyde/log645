@@ -45,12 +45,12 @@ int main(int argc, char** argv)
     else
     {
         // Initialize variables with default values
-        rowCount = 150;
-        columnCount = 20;
-        timeSteps = 50;
-        td = 0.0002f;
-        h = 0.1f;
-        procAllowedCount = 24;
+        rowCount = 10;
+        columnCount = 8;
+        timeSteps = 500;
+        td = 0.005f;
+        h = 1.0f;
+        procAllowedCount = 8;
 		if (procRank == 0)
 			printf("Arguments invalid, using default values.\n\n");
     }
@@ -64,6 +64,15 @@ int main(int argc, char** argv)
 	{
 		finalizeMPI();
 		return(EXIT_SUCCESS);
+	}
+	
+	
+	if (procRank == 0)
+	{
+		float originalMatrix[rowCount][columnCount];
+		initializeMatrix(rowCount, columnCount, originalMatrix);
+		printf ("Original matrix:\n");
+		printMatrix(rowCount, columnCount, originalMatrix);
 	}
 	
     parallelSolve();
@@ -125,8 +134,10 @@ void sequentialSolve()
 void parallelSolve()
 {
 	// Determine the size of a quarter of the matrix (the area we need to calculate)
-	int qColCount = (columnCount - 1) / 2;
-	int qRowCount = (rowCount - 1) / 2;
+	//int qColCount = (columnCount - 1) / 2;
+	//int qRowCount = (rowCount - 1) / 2;
+	int qColCount = columnCount - 2;
+	int qRowCount = rowCount - 2;
 	int divisions = qColCount * qRowCount;
 	
 	int i, j, procCount = 0, aggregatorIndex = 0;
@@ -169,7 +180,7 @@ void parallelSolve()
 	{
 		if (procCount / (qColCount / i) <= 0)
 		{
-			printf("WARNING : THIS SHOULDN'T HAPPEN");
+			printf("WARNING : If this happens, there's an error in the partitioning algorithm.");
 			continue;
 		}
 		if (qColCount % i == 0 && qRowCount % (procCount / (qColCount / i)) == 0)
@@ -329,7 +340,7 @@ void parallelSolve()
 						pM[secH + 1][i + 1] = inBottom[i];
 				}
 			}
-			else
+			/*else
 			{
 				for (i = 0; i < secW; i++)
 				{
@@ -339,7 +350,7 @@ void parallelSolve()
 					else
 						pM[secH + 1][i + 1] = pM[sourceRow][i + 1];
 				}
-			}
+			}*/
 			
 			if (secLeft >= 0)
 			{
@@ -365,7 +376,7 @@ void parallelSolve()
 						pM[i + 1][secW + 1] = inRight[i];
 				}
 			}
-			else
+			/*else
 			{
 				for (i = 0; i < secH; i++)
 				{
@@ -376,7 +387,7 @@ void parallelSolve()
 					else
 						pM[i + 1][secW + 1] = pM[i + 1][sourceCol];
 				}
-			}
+			}*/
 		}
 		
 		//if (procRank == 0) // [REMOVE]
@@ -406,7 +417,7 @@ void parallelSolve()
 		// Debug info about process setup
 		if (procRank == 0)
 		{
-			printf("Quarter matrix: %d x %d, Used proc: %d / %d, Aggregator process index: %d\n", qColCount, qRowCount, procCount, procAvailableCount, aggregatorIndex);
+			printf("Matrix size: %d x %d, Used proc: %d / %d, Aggregator process index: %d\n", qColCount, qRowCount, procCount, procAvailableCount, aggregatorIndex);
 			printf("%d x %d sections of dimension: %d x %d\n", secCountHor, secCountVer, sectionColCount, sectionRowCount);
 		}
 	}
@@ -435,7 +446,7 @@ void parallelSolve()
 		}
 		
 		// Fill out the other 3 quarters
-		for (i = 1; i < rowCount / 2; i++)
+		/*for (i = 1; i < rowCount / 2; i++)
 		{
 			for (j = 1; j < columnCount / 2; j++)
 			{
@@ -443,7 +454,7 @@ void parallelSolve()
 				baseMatrix[i][columnCount - j - 1] = baseMatrix[i][j];
 				baseMatrix[rowCount - i - 1][columnCount - j - 1] = baseMatrix[i][j];
 			}
-		}
+		}*/
 		
 		printMatrix(rowCount, columnCount, baseMatrix);
 		
