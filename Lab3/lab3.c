@@ -3,7 +3,6 @@
 #include <sys/time.h>
 #include <unistd.h>
 #include <mpi.h>
-#include <math.h>
 
 #define true 1
 #define false 0
@@ -46,11 +45,11 @@ int main(int argc, char** argv)
     {
         // Initialize variables with default values
         rowCount = 10;
-        columnCount = 8;
-        timeSteps = 500;
-        td = 0.005f;
-        h = 1.0f;
-        procAllowedCount = 8;
+        columnCount = 15;
+        timeSteps = 100;
+        td = 0.0002f;
+        h = 0.1f;
+        procAllowedCount = 24;
 		if (procRank == 0)
 			printf("Arguments invalid, using default values.\n\n");
     }
@@ -184,6 +183,11 @@ void parallelSolve()
 		{
 			sectionColCount = i;
 			sectionRowCount = qRowCount / (procCount / (qColCount / i));
+			if ((qColCount / sectionColCount) * (qRowCount / sectionRowCount) != procCount && procCount != 1)
+			{
+				sectionRowCount = 0;
+				sectionColCount = 0;
+			}
 		}
 	}
 	
