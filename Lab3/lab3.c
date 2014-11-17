@@ -1,3 +1,20 @@
+/******************************************************
+ Cours :             	LOG645
+ Session :           	Automne 2014
+ Groupe :            	1
+ Projet :            	Laboratoire #3
+ Étudiants :    		Vincent Couture
+						Francis Lanthier
+ Équipe :				18
+ Professeur :        	Lévis Thériault
+ Chargé de laboatoire:	Kevin Lachance-Coulombe
+ Date création :     	2014-10-15
+ Date dern. modif. : 	2014-11-17
+ 
+ Description :
+ Ce programme simule la dispertion de chaleur dans une plaque. L'exécution se fait en parallèle à l'aide de MPI.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
@@ -65,7 +82,6 @@ int main(int argc, char** argv)
 		return(EXIT_SUCCESS);
 	}
 	
-	
 	if (procRank == 0)
 	{
 		float originalMatrix[rowCount][columnCount];
@@ -132,9 +148,7 @@ void sequentialSolve()
 
 void parallelSolve()
 {
-	// Determine the size of a quarter of the matrix (the area we need to calculate)
-	//int qColCount = (columnCount - 1) / 2;
-	//int qRowCount = (rowCount - 1) / 2;
+	// Determine the size the matrix (the area we need to calculate)
 	int qColCount = columnCount - 2;
 	int qRowCount = rowCount - 2;
 	int divisions = qColCount * qRowCount;
@@ -164,25 +178,18 @@ void parallelSolve()
 	timeStart = (double) (tp.tv_sec) + (double) (tp.tv_usec) / 1e6;
 	
 	// Determine the best section size
-	/*for (i = sqrt(procCount); i > 0 && sectionRowCount == 0; i--)
-	{
-		if (qColCount % i == 0 && qRowCount % (procCount / (qColCount / i)) == 0)
-		{
-			sectionColCount = i;
-			sectionRowCount = qRowCount / (procCount / (qColCount / i));
-		}
-	}*/
 	for (i = qColCount; i > 0 && sectionRowCount == 0; i--)
 	{
 		if (procCount / (qColCount / i) <= 0)
 		{
-			printf("WARNING : If this happens, there's an error in the partitioning algorithm.");
+			printf("WARNING : If this happens, there's an error in the partitioning code.");
 			continue;
 		}
 		if (qColCount % i == 0 && qRowCount % (procCount / (qColCount / i)) == 0)
 		{
 			sectionColCount = i;
 			sectionRowCount = qRowCount / (procCount / (qColCount / i));
+			// Accounts for the exception where valid partitions are found that don't match our process count
 			if ((qColCount / sectionColCount) * (qRowCount / sectionRowCount) != procCount && procCount != 1)
 			{
 				sectionRowCount = 0;
@@ -210,9 +217,11 @@ void parallelSolve()
 		secY = secH * (procRank / secCountHor);
 		
 		// Each process needs to setup it's own pair of matrices
+		// They have an extra row and column on each side of the area they need to calculate
 		float pM[secH + 2][secW + 2]; // Previous Matrix (shortened for equation brevity)
 		float cM[secH + 2][secW + 2]; // Current Matrix (shortened for equation brevity)
 		
+		// Fill the matrix with the corresponding area of the original global matrix
 		for (i = secY; i <= secY + secH + 1; i++)
 		{
 			for (j = secX; j <= secX + secW + 1; j++)
@@ -311,11 +320,6 @@ void parallelSolve()
 				MPI_Send (outRight, secH, MPI_FLOAT, secRight, k, MPI_COMM_WORLD);
 			}
 			
-			//if (procRank == 0) // [REMOVE]
-			//{
-			//	printMatrix(secH + 2, secW + 2, pM);
-			//	printf("\n");
-			//}
 			// Each process waits for info about other borders and fills border information
 			if (secTop >= 0)
 			{
@@ -341,17 +345,6 @@ void parallelSolve()
 						pM[secH + 1][i + 1] = inBottom[i];
 				}
 			}
-			/*else
-			{
-				for (i = 0; i < secW; i++)
-				{
-					int sourceRow = rowCount % 2 == 0 ? secH : secH -1;
-					if (k % 2 == 0)
-						cM[secH + 1][i + 1] = cM[sourceRow][i + 1];
-					else
-						pM[secH + 1][i + 1] = pM[sourceRow][i + 1];
-				}
-			}*/
 			
 			if (secLeft >= 0)
 			{
@@ -377,30 +370,9 @@ void parallelSolve()
 						pM[i + 1][secW + 1] = inRight[i];
 				}
 			}
-			/*else
-			{
-				for (i = 0; i < secH; i++)
-				{
-					int sourceCol = columnCount % 2 == 0 ? secW : secW - 1;
-					
-					if (k % 2 == 0)
-						cM[i + 1][secW + 1] = cM[i + 1][sourceCol];
-					else
-						pM[i + 1][secW + 1] = pM[i + 1][sourceCol];
-				}
-			}*/
 		}
 		
-		//if (procRank == 0) // [REMOVE]
-		//{
-		//	if (k % 2 == 0)
-		//		printMatrix(secH + 2, secW + 2, pM);
-		//	else
-		//		printMatrix(secH + 2, secW + 2, cM);
-		//}
-		
 		// When done, send info to aggregator
-		
 		float aggregationBuffer[secW * secH];
 		for (i = 0; i < secH; i++)
 		{
@@ -446,17 +418,6 @@ void parallelSolve()
 			}
 		}
 		
-		// Fill out the other 3 quarters
-		/*for (i = 1; i < rowCount / 2; i++)
-		{
-			for (j = 1; j < columnCount / 2; j++)
-			{
-				baseMatrix[rowCount - i - 1][j] = baseMatrix[i][j];
-				baseMatrix[i][columnCount - j - 1] = baseMatrix[i][j];
-				baseMatrix[rowCount - i - 1][columnCount - j - 1] = baseMatrix[i][j];
-			}
-		}*/
-		
 		printMatrix(rowCount, columnCount, baseMatrix);
 		
 		gettimeofday (&tp, NULL);
@@ -465,6 +426,8 @@ void parallelSolve()
 		
 		printf("Parallel solve time : %.2f ms\n", Texec * 1000.0);
 		parSolveTime = Texec * 1000.0;
+		
+		// Time is measured by the aggregator. If proc 0 is not the aggregator, the time must be sent to it for the easier comparison at the end.
 		if (procRank != 0)
 		{
 			float confirm[1];
@@ -509,6 +472,7 @@ void printMatrix(int m, int n, float matrix[m][n])
     }
 }
 
+// Spinwait was used because usleep is not appropriate for such small millisecond values
 void spinWait(int milliseconds)
 {
     struct timeval startTime;
