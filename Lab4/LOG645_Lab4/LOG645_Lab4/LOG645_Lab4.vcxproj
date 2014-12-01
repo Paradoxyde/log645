@@ -79,14 +79,10 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="oclUtils.cpp" />
     <ClCompile Include="TP4.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="TP4.cl" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="oclUtils.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

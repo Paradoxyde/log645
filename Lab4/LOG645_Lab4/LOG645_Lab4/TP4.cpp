@@ -9,7 +9,7 @@ Projet :            	Laboratoire #4
 Professeur :        	Lévis Thériault
 Chargé de laboatoire:	Kevin Lachance-Coulombe
 Date création :     	2014-11-19
-Date dern. modif. : 	2014-1
+Date dern. modif. : 	2014-12-01
 
 Description :
 Ce programme simule la dispertion de chaleur dans une plaque. L'exécution se fait en parallèle à l'aide de OpenCL
@@ -17,7 +17,6 @@ Ce programme simule la dispertion de chaleur dans une plaque. L'exécution se fai
 
 #include <CL/cl.h>
 #include <chrono>
-#include "oclUtils.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -28,13 +27,14 @@ Ce programme simule la dispertion de chaleur dans une plaque. L'exécution se fai
 #define bool int
 
 void sequentialSolve();
-void parallelSolve(int kernelCount);
+void parallelSolve();
 float** getInitialMatrix();
 float* getInitialMatrixAsArray();
 void printMatrix(int m, int n, float** matrix);
 void printMatrixAsArray(int m, int n, float* matrix);
 void checkForError(cl_int status);
 void checkForError(cl_int status, char* taskDescription);
+char* oclLoadProgSource(const char* cFilename, const char* cPreamble, size_t*szFinalLength);
 
 int rowCount, columnCount, timeSteps, procAllowedCount;
 float td, h; // Discrete time and Section size
@@ -55,9 +55,9 @@ int main(int argc, char** argv)
 	else
 	{
 		// Initialize variables with default values
-		rowCount = 50;
-		columnCount = 50;
-		timeSteps = 1000;
+		rowCount = 100;
+		columnCount = 100;
+		timeSteps = 100;
 		td = 0.0002f;
 		h = 0.1f;
 		printf("Arguments invalid, using default values.\n\n");
@@ -67,19 +67,16 @@ int main(int argc, char** argv)
 	printf("Original matrix:\n");
 	printMatrix(rowCount, columnCount, originalMatrix);
 
-	parallelSolve(8);
+	parallelSolve();
 
 	printf("\nSequential solution:\n");
 
-
 	sequentialSolve();
-
-
-
 
 	return (EXIT_SUCCESS);
 }
 
+// Solve the problem with a sequential approach
 void sequentialSolve()
 {
 	std::chrono::system_clock::time_point timeStart = std::chrono::high_resolution_clock::now();
@@ -113,11 +110,11 @@ void sequentialSolve()
 	printf("Sequential solve duration : %.2f ms\n", seqSolveTime);
 }
 
-void parallelSolve(int kernelCount)
+// Solve the problem using a parallel approach with the help of OpenCL
+void parallelSolve()
 {
 	std::chrono::system_clock::time_point timeStart = std::chrono::high_resolution_clock::now();
 	float* solutionMatrix = getInitialMatrixAsArray();
-	// Setup the context, command queue, buffer, and program.
 	cl_platform_id platformId = nullptr;
 	cl_device_id deviceId = nullptr;
 
@@ -126,13 +123,13 @@ void parallelSolve(int kernelCount)
 	cl_mem bufferPM = nullptr;
 	cl_mem bufferCM = nullptr;
 	cl_program program = nullptr;
-	cl_kernel kernel = nullptr;
 
 	cl_int status = 0;
 	cl_int bufferSize = rowCount * columnCount * sizeof(float);
 	cl_uint numPlatforms;
 	cl_uint numDevices;
 
+	// Setup the context, command queue, buffer, and program.
 	status = clGetPlatformIDs(1, &platformId, &numPlatforms);
 	checkForError(status, "getting platforms");
 	printf("Num platforms : %d\nPlatform ID : %d\n", numPlatforms, platformId);
@@ -153,7 +150,6 @@ void parallelSolve(int kernelCount)
 	bufferCM = clCreateBuffer(context, CL_MEM_READ_WRITE, bufferSize, 0, &status);
 	checkForError(status, "creating bufferCM");
 
-	// Load the kernel file (TODO : [REMOVE] Remove oclUtils and read from file manually)
 	size_t programLength = 0;
 	char* programSource = oclLoadProgSource("TP4.cl", "", &programLength);
 
@@ -163,7 +159,6 @@ void parallelSolve(int kernelCount)
 	status = clBuildProgram(program, 0, nullptr, "", nullptr, nullptr);
 	checkForError(status, "building program");
 
-	// Launch kernels and perform calculations
 	float* pM = getInitialMatrixAsArray(); // Previous Matrix (shortened for equation brevity
 	float* cM = getInitialMatrixAsArray(); // Current Matrix (shortened for equation brevity)
 
@@ -173,44 +168,47 @@ void parallelSolve(int kernelCount)
 	status = clEnqueueWriteBuffer(commandQueue, bufferCM, true, 0, bufferSize, cM, 0, nullptr, nullptr);
 	checkForError(status, "Copying the initial matrix (even)");
 
-	size_t globalWorkSize[] = { bufferSize / sizeof(float) };
+	// The work size corresponds to the size of the matrix excluding borders
+	size_t globalWorkSize[] = { (rowCount - 2) * (columnCount - 2)};
 
+	// The two kernels use the same function but have opposite read/write matrices
+	cl_kernel kernelOdd;
+	cl_kernel kernelEven;
+
+	kernelOdd = clCreateKernel(program, "HeatTransfer", &status);
+	status = clSetKernelArg(kernelOdd, 0, sizeof(bufferCM), &bufferCM);
+	status = clSetKernelArg(kernelOdd, 1, sizeof(bufferPM), &bufferPM);
+	status = clSetKernelArg(kernelOdd, 2, sizeof(rowCount), &rowCount);
+	status = clSetKernelArg(kernelOdd, 3, sizeof(columnCount), &columnCount);
+	status = clSetKernelArg(kernelOdd, 4, sizeof(td), &td);
+	status = clSetKernelArg(kernelOdd, 5, sizeof(h), &h);
+
+	kernelEven = clCreateKernel(program, "HeatTransfer", &status);
+	status = clSetKernelArg(kernelEven, 0, sizeof(bufferPM), &bufferPM);
+	status = clSetKernelArg(kernelEven, 1, sizeof(bufferCM), &bufferCM);
+	status = clSetKernelArg(kernelEven, 2, sizeof(rowCount), &rowCount);
+	status = clSetKernelArg(kernelEven, 3, sizeof(columnCount), &columnCount);
+	status = clSetKernelArg(kernelEven, 4, sizeof(td), &td);
+	status = clSetKernelArg(kernelEven, 5, sizeof(h), &h);
+
+	// Perform actual calculations
 	int k;
 	for (k = 0; k < timeSteps; k++)
 	{
-		cl_event* taskComplete = new cl_event[kernelCount];
-		for (int n = 0; n < kernelCount; n++) // Where n is the kernel Id
-		{
-			kernel = clCreateKernel(program, "HeatTransfer", &status);
-
-			if (k % 2 == 0)
-			{
-				status = clSetKernelArg(kernel, 0, sizeof(bufferPM), &bufferPM);
-				status = clSetKernelArg(kernel, 1, sizeof(bufferCM), &bufferCM);
-			}
-			else
-			{
-				status = clSetKernelArg(kernel, 0, sizeof(bufferCM), &bufferCM);
-				status = clSetKernelArg(kernel, 1, sizeof(bufferPM), &bufferPM);
-			}
-			status = clSetKernelArg(kernel, 2, sizeof(rowCount), &rowCount);
-			status = clSetKernelArg(kernel, 3, sizeof(columnCount), &columnCount);
-			status = clSetKernelArg(kernel, 4, sizeof(kernelCount), &kernelCount);
-			int kernelId = n;
-			status = clSetKernelArg(kernel, 5, sizeof(kernelId), &kernelId);
-			status = clSetKernelArg(kernel, 6, sizeof(td), &td);
-			status = clSetKernelArg(kernel, 7, sizeof(h), &h);
-
-			status = clEnqueueNDRangeKernel(commandQueue, kernel, 1, nullptr, globalWorkSize, nullptr, 0, nullptr, &taskComplete[n]);
-		}
-		clWaitForEvents(kernelCount, taskComplete);
-		clReleaseEvent(*taskComplete);
+		cl_event taskComplete;
+		if (k % 2 == 0)
+			status = clEnqueueNDRangeKernel(commandQueue, kernelEven, 1, nullptr, globalWorkSize, nullptr, 0, nullptr, &taskComplete);
+		else
+			status = clEnqueueNDRangeKernel(commandQueue, kernelOdd, 1, nullptr, globalWorkSize, nullptr, 0, nullptr, &taskComplete);
+		clWaitForEvents(1, &taskComplete);
+		clReleaseEvent(taskComplete);
 	}
 
+	// Read appropriate buffer and display the result
 	if (k % 2 == 0)
-		status = clEnqueueReadBuffer(commandQueue, bufferPM, true, 0, bufferSize, solutionMatrix, 0, nullptr, nullptr);
-	else
 		status = clEnqueueReadBuffer(commandQueue, bufferCM, true, 0, bufferSize, solutionMatrix, 0, nullptr, nullptr);
+	else
+		status = clEnqueueReadBuffer(commandQueue, bufferPM, true, 0, bufferSize, solutionMatrix, 0, nullptr, nullptr);
 
 	checkForError(status, "reading solution matrix");
 
@@ -220,11 +218,13 @@ void parallelSolve(int kernelCount)
 	printf("Parallel solve duration : %.2f ms\n", parSolveTime);
 }
 
+// Overload with default message
 void checkForError(cl_int status)
 {
 	checkForError(status, "");
 }
 
+// Displays error message if the operation wasn't a success
 void checkForError(cl_int status, char* taskDescription)
 {
 	if (status != CL_SUCCESS)
@@ -233,6 +233,7 @@ void checkForError(cl_int status, char* taskDescription)
 	}
 }
 
+// Populate and return the starting matrix
 float** getInitialMatrix()
 {
 	int i, j;
@@ -251,6 +252,7 @@ float** getInitialMatrix()
 	return matrix;
 }
 
+// Populate and return the starting matrix as a 1D array. It's easier to deal with CUDA buffers this way.
 float* getInitialMatrixAsArray()
 {
 	int i, j, k;
@@ -269,12 +271,14 @@ float* getInitialMatrixAsArray()
 	return matrix;
 }
 
+// Prints matrix to console
 void printMatrix(int m, int n, float** matrix)
 {
-	if (m * n > 1000)
+	if (m > 8 || n > 8)
 	{
-		printf("Did not print matrix because it had over 1000 entries.\n");
-		return;
+		if (m > 8) m = 8;
+		if (n > 8) n = 8;
+		printf("Printing only the top 8x8 corner.\n");
 	}
 
 	int i, j;
@@ -290,12 +294,15 @@ void printMatrix(int m, int n, float** matrix)
 	}
 }
 
+// Print array to console in matrix form
 void printMatrixAsArray(int m, int n, float* matrix)
 {
-	if (m * n > 1000)
+
+	if (m > 8 || n > 8)
 	{
-		printf("Did not print matrix because it had over 1000 entries.\n");
-		return;
+		if (m > 8) m = 8;
+		if (n > 8) n = 8;
+		printf("Printing only the top 8x8 corner.\n");
 	}
 
 	int i, j, k;
@@ -305,10 +312,59 @@ void printMatrixAsArray(int m, int n, float* matrix)
 	{
 		for (j = 0; j < n; j++)
 		{
-			printf("%5.1f ", matrix[k]);
+			printf("%5.1f ", matrix[i * columnCount + j]);
 			k++;
 		}
 
 		printf("\n");
 	}
+}
+
+//////////////////////////////////////////////////////////////////////////////
+//! SOURCE : Tel que proposé sur le site du cours, avec la source orignale : //developer.nvidia.com/opencl
+//! Loads a Program file and prepends the cPreamble to the code.
+//!
+//! @return the source string if succeeded, 0 otherwise
+//! @param cFilename program filename
+//! @param cPreamble code that is prepended to the loaded file, typically a set of#defines or a header
+//! @param szFinalLength returned length of the code string
+//////////////////////////////////////////////////////////////////////////////
+char* oclLoadProgSource(const char* cFilename, const char* cPreamble, size_t*szFinalLength)
+{
+	// locals
+	FILE* pFileStream = NULL;
+	size_t szSourceLength;
+
+	// open the OpenCL source code file
+	if (fopen_s(&pFileStream, cFilename, "rb") != 0)
+	{
+		return NULL;
+	}
+
+	size_t szPreambleLength = strlen(cPreamble);
+
+	// get the length of the source code
+	fseek(pFileStream, 0, SEEK_END);
+	szSourceLength = ftell(pFileStream);
+	fseek(pFileStream, 0, SEEK_SET);
+
+	// allocate a buffer for the source code string and read it in
+	char* cSourceString = (char*)malloc(szSourceLength + szPreambleLength + 1);
+	memcpy(cSourceString, cPreamble, szPreambleLength);
+	if(fread((cSourceString)+szPreambleLength, szSourceLength, 1, pFileStream) != 1)
+	{
+		fclose(pFileStream);
+		free(cSourceString);
+		return 0;
+	}
+
+	// close the file and return the total length of the combined (preamble + source) string
+	fclose(pFileStream);
+	if(szFinalLength != 0)
+	{
+		*szFinalLength = szSourceLength + szPreambleLength;
+	}
+	cSourceString[szSourceLength + szPreambleLength] ='\0';
+
+	return cSourceString;
 }
