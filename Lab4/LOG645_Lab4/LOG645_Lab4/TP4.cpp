@@ -55,8 +55,8 @@ int main(int argc, char** argv)
 	else
 	{
 		// Initialize variables with default values
-		rowCount = 100;
-		columnCount = 100;
+		rowCount = 1000;
+		columnCount = 1000;
 		timeSteps = 100;
 		td = 0.0002f;
 		h = 0.1f;
@@ -72,6 +72,8 @@ int main(int argc, char** argv)
 	printf("\nSequential solution:\n");
 
 	sequentialSolve();
+
+	printf("\nSeq/Par acceleration : %.3f\n\n", seqSolveTime / parSolveTime);
 
 	return (EXIT_SUCCESS);
 }
